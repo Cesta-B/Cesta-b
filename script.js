@@ -1,5 +1,31 @@
-// Lista completa padrão de itens com suas metas iniciais
-let itensGlobais = JSON.parse(localStorage.getItem('cestas_itens_globais')) || [
+// Importações do Firebase via CDN oficial
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+
+// Configuração oficial do Firebase (Projeto cestab-v2)
+const firebaseConfig = {
+  apiKey: "AIzaSyB-yToU7gjYCe6QfUO1Q3nhJmgA38m8OWg",
+  authDomain: "cestab-v2.firebaseapp.com",
+  projectId: "cestab-v2",
+  storageBucket: "cestab-v2.firebasestorage.app",
+  messagingSenderId: "1034783884972",
+  appId: "1:1034783884972:web:ec96c6bf56d7704c4d4109",
+  measurementId: "G-QNZF7R24CK"
+};
+
+// Inicialização do Firebase
+let db = null;
+try {
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    getAnalytics(app);
+} catch (e) {
+    console.warn("Erro ao iniciar o Firebase:", e);
+}
+
+// Listas padrão iniciais
+let itensGlobais = [
     { id: 'biscoito_recheado', nome: 'Biscoito recheado - 200g' },
     { id: 'arroz', nome: 'Arroz tipo 1 - 5kg' },
     { id: 'feijao', nome: 'Feijão carioca - 1kg' },
@@ -24,7 +50,7 @@ let itensGlobais = JSON.parse(localStorage.getItem('cestas_itens_globais')) || [
     { id: 'sabonete', nome: 'Sabonete barra - 90g' }
 ];
 
-let tiposCesta = JSON.parse(localStorage.getItem('cestas_tipos_globais')) || [
+let tiposCesta = [
     {
         id: 'padrao',
         nome: 'Cesta Básica Padrão',
@@ -61,14 +87,42 @@ const modeloDadosCestasIniciais = [
     { id: 3, nome: "Cesta 3", tipoId: 'padrao', itens: JSON.parse(JSON.stringify(tiposCesta[0].itens)), contribuicoes: [] }
 ];
 
-let dadosCestas = JSON.parse(localStorage.getItem('cestas_dados_app')) || modeloDadosCestasIniciais;
+let dadosCestas = modeloDadosCestasIniciais;
 let cestaAtualAtiva = 1;
 let cestaVisualizadaAdmin = 1;
 
-function salvarLocal() {
-    localStorage.setItem('cestas_dados_app', JSON.stringify(dadosCestas));
-    localStorage.setItem('cestas_itens_globais', JSON.stringify(itensGlobais));
-    localStorage.setItem('cestas_tipos_globais', JSON.stringify(tiposCesta));
+// Funções de Sincronização com o Banco de Dados Firestore
+async function carregarDadosDoBanco() {
+    if (!db) return;
+    try {
+        const docRef = doc(db, "sistema", "configApp");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.dadosCestas) dadosCestas = data.dadosCestas;
+            if (data.itensGlobais) itensGlobais = data.itensGlobais;
+            if (data.tiposCesta) tiposCesta = data.tiposCesta;
+        } else {
+            await setDoc(docRef, { dadosCestas, itensGlobais, tiposCesta });
+        }
+    } catch (e) {
+        console.warn("Erro ao carregar do Firebase:", e);
+    }
+    renderizarTela1();
+}
+
+async function salvarLocal() {
+    if (db) {
+        try {
+            await setDoc(doc(db, "sistema", "configApp"), {
+                dadosCestas,
+                itensGlobais,
+                tiposCesta
+            });
+        } catch (e) {
+            console.warn("Erro ao salvar no Firebase:", e);
+        }
+    }
 }
 
 function mudarTela(idTela) {
@@ -100,7 +154,7 @@ function renderizarTela1() {
 
         const card = document.createElement('div');
         card.className = `menu-card ${isLocked ? 'locked' : ''}`;
-        
+
         card.onclick = () => {
             if (isLocked) {
                 mostrarAviso("Cesta Bloqueada", "A cesta anterior ainda não está totalmente preenchida!");
@@ -109,16 +163,14 @@ function renderizarTela1() {
             abrirCesta(cesta.id);
         };
 
-       card.innerHTML = `
+        card.innerHTML = `
             <div class="menu-card-left">
-                <!-- Ícone da Cesta Básica -->
                 <img src="images/box.png" class="menu-icon" style="width: 24px; height: 24px; vertical-align: middle;">
                 <span style="font-weight: 600;">${cesta.nome}</span>
             </div>
             <div>
                 ${isLocked ? 
-                    `<!-- Ícone do Relógio -->
-                     <img src="images/clock.png" class="menu-icon-lock" style="width: 18px; height: 18px; vertical-align: middle;">` : 
+                    `<img src="images/clock.png" class="menu-icon-lock" style="width: 18px; height: 18px; vertical-align: middle;">` : 
                     '<span style="font-size: 12px; color: var(--cinza-medio);">Disponível ➔</span>'
                 }
             </div>
@@ -148,21 +200,21 @@ function renderizarItensCestaAtiva() {
     let container = document.getElementById('containerItensCesta');
     if(!container) return;
     container.innerHTML = '';
-    
+
     let dados = dadosCestas.find(c => c.id === cestaAtualAtiva);
     if (!dados) return;
 
     let totalMeta = dados.itens.reduce((acc, i) => acc + i.meta, 0);
     let totalAtual = dados.itens.reduce((acc, i) => acc + i.atual, 0);
     let porc = totalMeta > 0 ? (totalAtual / totalMeta) * 100 : 0;
-    
+
     let barra = document.getElementById('barraProgresso');
     if(barra) barra.style.width = `${porc}%`;
 
     dados.itens.forEach(item => {
         let completo = item.atual >= item.meta;
         let restante = item.meta - item.atual;
-        
+
         let optionsHtml = '';
         for (let i = 0; i <= restante; i++) {
             optionsHtml += `<option value="${i}">${i}</option>`;
@@ -207,7 +259,7 @@ async function registrarContribuicao() {
         if(qtdDesejada > 0) {
             let itemId = sel.getAttribute('data-id');
             let itemObj = dados.itens.find(i => i.id === itemId);
-            
+
             if(itemObj) {
                 totalAdicionado += qtdDesejada;
                 itemObj.atual += qtdDesejada;
@@ -228,7 +280,7 @@ async function registrarContribuicao() {
         return;
     }
 
-    salvarLocal();
+    await salvarLocal();
     if(inputNome) inputNome.value = '';
     renderizarItensCestaAtiva();
     renderizarTela1();
@@ -250,15 +302,14 @@ function renderizarAdminCestasList() {
 
     dadosCestas.forEach((cesta, index) => {
         let isLocked = index > 0 && !verificarCestaCompletaPorIndex(index - 1);
-        
+
         let card = document.createElement('div');
         card.className = "menu-card";
         card.style.padding = "10px 14px";
         card.innerHTML = `
             <div class="menu-card-left">
                <img src="images/box.png" class="menu-icon" style="width: 24px; height: 24px; vertical-align: middle;">
-                <span style="font-weight: 600;">${cesta.nome}</span>
-                <span>${cesta.nome} ${isLocked ? '(Bloqueada)' : ''}</span>
+               <span style="font-weight: 600;">${cesta.nome} ${isLocked ? '(Bloqueada)' : ''}</span>
             </div>
             <button class="btn" style="padding: 4px 10px; font-size: 0.8rem;" onclick="verDetalhesAdmin(${cesta.id})">Gerenciar</button>
         `;
@@ -292,13 +343,15 @@ function renderizarListaContribuicoesAdmin() {
         div.className = 'contribution-item';
         div.innerHTML = `
             <span><b>${c.nome}</b>: ${c.item}</span>
-            <button class="btn btn-danger" style="padding: 2px 8px; font-size: 0.8rem;" onclick="removerContribuicaoAdmin(${c.idUnico})"><img src="images/delete.png" class="menu-icon" style="width: 24px; height: 24px; vertical-align: middle;"></button>
+            <button class="btn btn-danger" style="padding: 2px 8px; font-size: 0.8rem;" onclick="removerContribuicaoAdmin(${c.idUnico})">
+                <img src="images/delete.png" class="menu-icon" style="width: 20px; height: 20px; vertical-align: middle;">
+            </button>
         `;
         container.appendChild(div);
     });
 }
 
-window.removerContribuicaoAdmin = function(idUnico) {
+window.removerContribuicaoAdmin = async function(idUnico) {
     let dadosCesta = dadosCestas.find(c => c.id === cestaVisualizadaAdmin);
     if (!dadosCesta) return;
 
@@ -315,7 +368,7 @@ window.removerContribuicaoAdmin = function(idUnico) {
         }
 
         dadosCesta.contribuicoes.splice(index, 1);
-        salvarLocal();
+        await salvarLocal();
         renderizarListaContribuicoesAdmin();
         renderizarTela1();
         mostrarAviso("Sucesso", "Contribuição removida e estoque recalculado.");
@@ -327,16 +380,35 @@ function renderizarCheckboxesCriarTipo() {
     if (!container) return;
     container.innerHTML = '';
 
+    const padraoRef = tiposCesta.find(t => t.id === 'padrao');
+
     itensGlobais.forEach(item => {
+        let itemPadrao = padraoRef ? padraoRef.itens.find(i => i.id === item.id) : null;
+        let metaInicial = itemPadrao ? itemPadrao.meta : 1;
+
         let div = document.createElement('div');
-        div.style.cssText = "display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 0.9rem;";
+        div.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; padding: 4px 6px; border-bottom: 1px solid #f0f0f0; font-size: 0.9rem;";
         div.innerHTML = `
-            <input type="checkbox" class="check-item-tipo" value="${item.id}" id="chk_${item.id}">
-            <label for="chk_${item.id}">${item.nome}</label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" class="check-item-tipo" value="${item.id}" id="chk_${item.id}" onchange="alternarCampoQtd('${item.id}', this.checked)">
+                <label for="chk_${item.id}" style="cursor: pointer;">${item.nome}</label>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+                <label for="qtd_tipo_${item.id}" style="font-size: 0.75rem; color: var(--text-muted);">Qtd:</label>
+                <input type="number" id="qtd_tipo_${item.id}" value="${metaInicial}" min="1" disabled style="width: 55px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; text-align: center; background-color: #f4f4f5;">
+            </div>
         `;
         container.appendChild(div);
     });
 }
+
+window.alternarCampoQtd = function(itemId, isChecked) {
+    const inputQtd = document.getElementById(`qtd_tipo_${itemId}`);
+    if (inputQtd) {
+        inputQtd.disabled = !isChecked;
+        inputQtd.style.backgroundColor = isChecked ? '#ffffff' : '#f4f4f5';
+    }
+};
 
 function carregarSelectTiposCesta() {
     let select = document.getElementById('selectTipoCestaModelo');
@@ -352,7 +424,8 @@ function carregarSelectTiposCesta() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    renderizarTela1();
+    // Carregar dados da nuvem ao iniciar
+    carregarDadosDoBanco();
 
     document.getElementById('btnAdmin')?.addEventListener('click', () => {
         let senha = prompt('Digite a senha do Administrador:');
@@ -381,7 +454,7 @@ document.addEventListener("DOMContentLoaded", () => {
         mudarTela('telaCriarCesta');
     });
 
-    document.getElementById('btnSalvarNovoItem')?.addEventListener('click', () => {
+    document.getElementById('btnSalvarNovoItem')?.addEventListener('click', async () => {
         let nomeItem = document.getElementById('inputNomeNovoItem').value.trim();
         if(!nomeItem) {
             mostrarAviso("Atenção", "Digite o nome do item.");
@@ -390,13 +463,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let novoId = 'item_' + Date.now();
         itensGlobais.push({ id: novoId, nome: nomeItem });
-        salvarLocal();
+        await salvarLocal();
         mostrarAviso("Sucesso", "Novo item cadastrado com sucesso!");
         mudarTela('tela3');
         renderizarAdminCestasList();
     });
 
-    document.getElementById('btnSalvarNovoTipoCesta')?.addEventListener('click', () => {
+    document.getElementById('btnSalvarNovoTipoCesta')?.addEventListener('click', async () => {
         let nomeTipo = document.getElementById('inputNomeNovoTipo').value.trim();
         if(!nomeTipo) {
             mostrarAviso("Atenção", "Digite o nome do tipo de cesta.");
@@ -413,12 +486,15 @@ document.addEventListener("DOMContentLoaded", () => {
         checkboxes.forEach(chk => {
             let itemId = chk.value;
             let itemGlobal = itensGlobais.find(i => i.id === itemId);
+            let inputQtd = document.getElementById(`qtd_tipo_${itemId}`);
+            let metaDefinida = inputQtd ? Math.max(1, parseInt(inputQtd.value) || 1) : 1;
+
             if(itemGlobal) {
                 itensDoTipo.push({
                     id: itemGlobal.id,
                     nome: itemGlobal.nome,
                     atual: 0,
-                    meta: 1
+                    meta: metaDefinida
                 });
             }
         });
@@ -430,13 +506,13 @@ document.addEventListener("DOMContentLoaded", () => {
             itens: itensDoTipo
         });
 
-        salvarLocal();
+        await salvarLocal();
         mostrarAviso("Sucesso", "Novo tipo de cesta cadastrado com sucesso!");
         mudarTela('tela3');
         renderizarAdminCestasList();
     });
 
-    document.getElementById('btnSalvarNovaCestaInstancia')?.addEventListener('click', () => {
+    document.getElementById('btnSalvarNovaCestaInstancia')?.addEventListener('click', async () => {
         let nomeCesta = document.getElementById('inputNomeNovaCestaInstancia').value.trim();
         let tipoIdSelecionado = document.getElementById('selectTipoCestaModelo').value;
 
@@ -460,7 +536,7 @@ document.addEventListener("DOMContentLoaded", () => {
             contribuicoes: []
         });
 
-        salvarLocal();
+        await salvarLocal();
         renderizarAdminCestasList();
         renderizarTela1();
         mostrarAviso("Sucesso", `${nomeCesta} criada e adicionada à bandeja!`);
@@ -468,7 +544,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     document.getElementById('btnRegistrar')?.addEventListener('click', registrarContribuicao);
-    
+
     document.getElementById('btnVoltarTela2')?.addEventListener('click', () => { renderizarTela1(); mudarTela('tela1'); });
     document.getElementById('btnVoltarTela3')?.addEventListener('click', () => { renderizarTela1(); mudarTela('tela1'); });
     document.getElementById('btnVoltarTela4')?.addEventListener('click', () => { renderizarAdminCestasList(); mudarTela('tela3'); });
@@ -476,13 +552,13 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('btnVoltarTelaTipoCesta')?.addEventListener('click', () => mudarTela('tela3'));
     document.getElementById('btnVoltarTelaCriarCesta')?.addEventListener('click', () => mudarTela('tela3'));
 
-    document.getElementById('btnResetar')?.addEventListener('click', () => {
+    document.getElementById('btnResetar')?.addEventListener('click', async () => {
         if(confirm("Tem certeza absoluta que deseja resetar esta cesta?")) {
             let dados = dadosCestas.find(c => c.id === cestaVisualizadaAdmin);
             if(dados) {
                 dados.contribuicoes = [];
                 dados.itens.forEach(i => i.atual = 0);
-                salvarLocal();
+                await salvarLocal();
                 renderizarListaContribuicoesAdmin();
                 renderizarTela1();
                 mostrarAviso("Sucesso", "Cesta resetada!");
@@ -490,10 +566,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    document.getElementById('btnExcluirCesta')?.addEventListener('click', () => {
+    document.getElementById('btnExcluirCesta')?.addEventListener('click', async () => {
         if(confirm("Tem certeza que deseja excluir esta cesta permanentemente da bandeja?")) {
             dadosCestas = dadosCestas.filter(c => c.id !== cestaVisualizadaAdmin);
-            salvarLocal();
+            await salvarLocal();
             renderizarAdminCestasList();
             renderizarTela1();
             mostrarAviso("Sucesso", "Cesta excluída com sucesso!");
@@ -513,7 +589,7 @@ function mostrarAviso(titulo, mensagem) {
     document.getElementById('customAlertMessage').innerText = mensagem;
     let modal = document.getElementById('customAlertModal');
     modal.style.display = 'flex';
-    
+
     document.getElementById('customAlertBtn').onclick = () => {
         modal.style.display = 'none';
     };
