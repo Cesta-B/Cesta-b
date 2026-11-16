@@ -50,11 +50,15 @@ Utilize uma extensão de servidor local (como o Live Server) para abrir o arquiv
 ## 🗺️ Próximos Passos (Roadmap)
 As seguintes melhorias estão planejadas para as próximas versões do sistema:
 
+[✔] Seleção de Quantidade por Input: Permitir que o doador escolha o número exato de itens que está levando de uma só vez.
+
+[✔] Refatoração Visual: Substituir os elementos atuais por ícones em SVG para dar uma estética mais profissional e minimalista (clean).
+
+[✔] Possibilidade de criar novas cestas personalizadas e excluir cestas.
+
+[✔] Possibilidade de criar itens personalizados.
+
 [ ] Contador de Cestas Concluídas: Exibir um panorama geral de quantas cestas completas já foram finalizadas e entregues.
-
-[ ] Seleção de Quantidade por Input: Permitir que o doador escolha o número exato de itens que está levando de uma só vez.
-
-[ ] Refatoração Visual: Substituir os elementos atuais por ícones em SVG para dar uma estética mais profissional e minimalista (clean).
 
 [ ] Painel de Gestão Dinâmico: Interface para que o administrador possa criar novas cestas e adicionar/remover produtos cadastrados direto pelo front-end.
 
