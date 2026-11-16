@@ -1,4 +1,3 @@
-// Importações do Firebase via CDN oficial
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
@@ -91,7 +90,7 @@ let dadosCestas = modeloDadosCestasIniciais;
 let cestaAtualAtiva = 1;
 let cestaVisualizadaAdmin = 1;
 
-// Funções de Sincronização com o Banco de Dados Firestore
+// Sincronização com Firestore
 async function carregarDadosDoBanco() {
     if (!db) return;
     try {
@@ -311,21 +310,23 @@ function renderizarAdminCestasList() {
                <img src="images/box.png" class="menu-icon" style="width: 24px; height: 24px; vertical-align: middle;">
                <span style="font-weight: 600;">${cesta.nome} ${isLocked ? '(Bloqueada)' : ''}</span>
             </div>
-            <button class="btn" style="padding: 4px 10px; font-size: 0.8rem;" onclick="verDetalhesAdmin(${cesta.id})">Gerenciar</button>
+            <button class="btn" style="padding: 4px 10px; font-size: 0.8rem;" onclick="window.verDetalhesAdmin(${cesta.id})">Gerenciar</button>
         `;
         container.appendChild(card);
     });
 }
 
-function verDetalhesAdmin(idCesta) {
-    let index = dadosCestas.findIndex(c => c.id === idCesta);
+// Funções globais atachadas ao window para módulos ES
+window.verDetalhesAdmin = function(idCesta) {
+    let index = dadosCestas.findIndex(c => c.id === Number(idCesta) || c.id === idCesta);
     if (index === -1) return;
 
-    cestaVisualizadaAdmin = idCesta;
-    document.getElementById('tituloTela4').innerText = `Gerenciamento - ${dadosCestas[index].nome}`;
+    cestaVisualizadaAdmin = dadosCestas[index].id;
+    let titulo = document.getElementById('tituloTela4');
+    if(titulo) titulo.innerText = `Gerenciamento - ${dadosCestas[index].nome}`;
     renderizarListaContribuicoesAdmin();
     mudarTela('tela4');
-}
+};
 
 function renderizarListaContribuicoesAdmin() {
     let container = document.getElementById('containerContribuicoesLista');
@@ -343,7 +344,7 @@ function renderizarListaContribuicoesAdmin() {
         div.className = 'contribution-item';
         div.innerHTML = `
             <span><b>${c.nome}</b>: ${c.item}</span>
-            <button class="btn btn-danger" style="padding: 2px 8px; font-size: 0.8rem;" onclick="removerContribuicaoAdmin(${c.idUnico})">
+            <button class="btn btn-danger" style="padding: 2px 8px; font-size: 0.8rem;" onclick="window.removerContribuicaoAdmin(${c.idUnico})">
                 <img src="images/delete.png" class="menu-icon" style="width: 20px; height: 20px; vertical-align: middle;">
             </button>
         `;
@@ -373,7 +374,7 @@ window.removerContribuicaoAdmin = async function(idUnico) {
         renderizarTela1();
         mostrarAviso("Sucesso", "Contribuição removida e estoque recalculado.");
     }
-}
+};
 
 function renderizarCheckboxesCriarTipo() {
     let container = document.getElementById('containerCheckboxesItens');
@@ -390,7 +391,7 @@ function renderizarCheckboxesCriarTipo() {
         div.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; padding: 4px 6px; border-bottom: 1px solid #f0f0f0; font-size: 0.9rem;";
         div.innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" class="check-item-tipo" value="${item.id}" id="chk_${item.id}" onchange="alternarCampoQtd('${item.id}', this.checked)">
+                <input type="checkbox" class="check-item-tipo" value="${item.id}" id="chk_${item.id}" onchange="window.alternarCampoQtd('${item.id}', this.checked)">
                 <label for="chk_${item.id}" style="cursor: pointer;">${item.nome}</label>
             </div>
             <div style="display: flex; align-items: center; gap: 4px;">
@@ -424,7 +425,6 @@ function carregarSelectTiposCesta() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Carregar dados da nuvem ao iniciar
     carregarDadosDoBanco();
 
     document.getElementById('btnAdmin')?.addEventListener('click', () => {
@@ -557,6 +557,7 @@ document.addEventListener("DOMContentLoaded", () => {
             let dados = dadosCestas.find(c => c.id === cestaVisualizadaAdmin);
             if(dados) {
                 dados.contribuicoes = [];
+                dados.itens.files?.forEach?.(i => i.atual = 0);
                 dados.itens.forEach(i => i.atual = 0);
                 await salvarLocal();
                 renderizarListaContribuicoesAdmin();
