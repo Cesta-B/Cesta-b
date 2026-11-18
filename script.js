@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
 
 // Configuração oficial do Firebase (Projeto cestab-v2)
@@ -90,24 +90,33 @@ let dadosCestas = modeloDadosCestasIniciais;
 let cestaAtualAtiva = 1;
 let cestaVisualizadaAdmin = 1;
 
-// Sincronização com Firestore
-async function carregarDadosDoBanco() {
+// Sincronização e Escuta em Tempo Real com Firestore
+function iniciarEscutaBanco() {
     if (!db) return;
-    try {
-        const docRef = doc(db, "sistema", "configApp");
-        const docSnap = await getDoc(docRef);
+    const docRef = doc(db, "sistema", "configApp");
+    
+    onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.dadosCestas) dadosCestas = data.dadosCestas;
             if (data.itensGlobais) itensGlobais = data.itensGlobais;
             if (data.tiposCesta) tiposCesta = data.tiposCesta;
         } else {
-            await setDoc(docRef, { dadosCestas, itensGlobais, tiposCesta });
+            setDoc(docRef, { dadosCestas, itensGlobais, tiposCesta });
         }
-    } catch (e) {
-        console.warn("Erro ao carregar do Firebase:", e);
-    }
-    renderizarTela1();
+        renderizarTela1();
+        if (document.getElementById('tela2')?.classList.contains('active')) {
+            renderizarItensCestaAtiva();
+        }
+        if (document.getElementById('tela4')?.classList.contains('active')) {
+            renderizarListaContribuicoesAdmin();
+        }
+        if (document.getElementById('tela3')?.classList.contains('active')) {
+            renderizarAdminCestasList();
+        }
+    }, (error) => {
+        console.warn("Erro ao escutar mudanças do Firebase:", error);
+    });
 }
 
 async function salvarLocal() {
@@ -260,22 +269,29 @@ async function registrarContribuicao() {
             let itemObj = dados.itens.find(i => i.id === itemId);
 
             if(itemObj) {
-                totalAdicionado += qtdDesejada;
-                itemObj.atual += qtdDesejada;
+                let restanteDisponivel = itemObj.meta - itemObj.atual;
+                if (qtdDesejada > restanteDisponivel) {
+                    qtdDesejada = restanteDisponivel;
+                }
 
-                let resumoItem = `${itemObj.nome.split('-')[0].trim()} (${qtdDesejada}x)`;
-                dados.contribuicoes.push({
-                    idUnico: Date.now() + Math.random(),
-                    nome: nome,
-                    item: `${resumoItem} - ${itemObj.atual}/${itemObj.meta}`
-                });
-                itensFlegadosNomes.push(resumoItem);
+                if (qtdDesejada > 0) {
+                    totalAdicionado += qtdDesejada;
+                    itemObj.atual += qtdDesejada;
+
+                    let resumoItem = `${itemObj.nome.split('-')[0].trim()} (${qtdDesejada}x)`;
+                    dados.contribuicoes.push({
+                        idUnico: Date.now() + Math.random(),
+                        nome: nome,
+                        item: `${resumoItem} - ${itemObj.atual}/${itemObj.meta}`
+                    });
+                    itensFlegadosNomes.push(resumoItem);
+                }
             }
         }
     });
 
     if(totalAdicionado === 0) {
-        mostrarAviso("Atenção", "Selecione a quantidade de pelo menos um item.");
+        mostrarAviso("Atenção", "Selecione a quantidade de pelo menos um item válido.");
         return;
     }
 
@@ -425,7 +441,8 @@ function carregarSelectTiposCesta() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    carregarDadosDoBanco();
+    // Inicia a escuta em tempo real assim que o DOM carregar
+    iniciarEscutaBanco();
 
     document.getElementById('btnAdmin')?.addEventListener('click', () => {
         let senha = prompt('Digite a senha do Administrador:');
@@ -557,7 +574,6 @@ document.addEventListener("DOMContentLoaded", () => {
             let dados = dadosCestas.find(c => c.id === cestaVisualizadaAdmin);
             if(dados) {
                 dados.contribuicoes = [];
-                dados.itens.files?.forEach?.(i => i.atual = 0);
                 dados.itens.forEach(i => i.atual = 0);
                 await salvarLocal();
                 renderizarListaContribuicoesAdmin();
