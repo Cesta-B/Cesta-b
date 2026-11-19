@@ -58,9 +58,9 @@ As seguintes melhorias estão planejadas para as próximas versões do sistema:
 
 [✔] Possibilidade de criar itens personalizados.
 
-[ ] Contador de Cestas Concluídas: Exibir um panorama geral de quantas cestas completas já foram finalizadas e entregues.
+[✔] Painel de Gestão Dinâmico: Interface para que o administrador possa criar novas cestas e adicionar/remover produtos cadastrados direto pelo front-end.
 
-[ ] Painel de Gestão Dinâmico: Interface para que o administrador possa criar novas cestas e adicionar/remover produtos cadastrados direto pelo front-end.
+[ ] Contador de Cestas Concluídas: Exibir um panorama geral de quantas cestas completas já foram finalizadas e entregues.
 
 [ ] Gráficos de Acompanhamento: Adicionar gráficos estatísticos para visualizar o progresso das arrecadações em tempo real.
 
