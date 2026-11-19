@@ -110,7 +110,7 @@ button:hover {
 .btn-danger {
     background: transparent;
     border: none;
-    color: var(--danger);
+    color: var(--cinza-medio);
 }
 .btn-danger:hover {
     background: #b91c1c;
